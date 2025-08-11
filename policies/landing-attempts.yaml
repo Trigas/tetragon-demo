@@ -1,0 +1,21 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: landing-attempts
+spec:
+  kprobes:
+  - call: "security_bprm_check"
+    syscall: false
+    selectors:
+    - matchPIDs:
+      - namespace: true
+    - matchNamespaces:
+      - namespace: "tetragon-demo"
+    - matchArgs:
+      - index: 0
+        operator: "endswith"
+        values: ["/curl", "/curl-static"]
+    - matchArgs:
+      - index: 1
+        operator: "contains"
+        values: ["request-landing"]

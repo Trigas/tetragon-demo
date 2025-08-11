@@ -1,0 +1,96 @@
+{
+  "id": null,
+  "title": "Tetragon \u2014 Tracing Policy Events (Demo)",
+  "timezone": "browser",
+  "version": 1,
+  "schemaVersion": 38,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "label": "Prometheus",
+        "current": {
+          "text": "Prometheus",
+          "value": "Prometheus"
+        },
+        "options": [],
+        "refresh": 1
+      },
+      {
+        "name": "namespace",
+        "type": "query",
+        "label": "Namespace",
+        "datasource": "${datasource}",
+        "query": "label_values(tetragon_tracingpolicy_events_total, namespace)",
+        "refresh": 2,
+        "hide": 0
+      },
+      {
+        "name": "policy",
+        "type": "query",
+        "label": "TracingPolicy",
+        "datasource": "${datasource}",
+        "query": "label_values(tetragon_tracingpolicy_events_total, tracing_policy)",
+        "refresh": 2,
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Events over time",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "sum by(tracing_policy) (rate(tetragon_tracingpolicy_events_total{{namespace=~\"$namespace\", tracing_policy=~\"$policy\"}}[1m]))",
+          "legendFormat": "{{tracing_policy}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Total events (current range)",
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "targets": [
+        {
+          "expr": "sum(tetragon_tracingpolicy_events_total{namespace=~\"$namespace\", tracing_policy=~\"$policy\"})"
+        }
+      ]
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "type": "dashboard",
+        "name": "Annotations & Alerts"
+      }
+    ]
+  }
+}

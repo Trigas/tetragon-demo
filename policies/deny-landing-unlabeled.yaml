@@ -1,0 +1,25 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: deny-landing-unlabeled
+spec:
+  kprobes:
+  - call: "security_bprm_check"
+    syscall: false
+    selectors:
+    - matchNamespaces:
+      - namespace: "tetragon-demo"
+    - podSelector:
+        matchExpressions:
+        - key: allow-landing
+          operator: DoesNotExist
+    - matchArgs:
+      - index: 0
+        operator: "endswith"
+        values: ["/curl", "/curl-static"]
+    - matchArgs:
+      - index: 1
+        operator: "contains"
+        values: ["request-landing"]
+    - actions:
+      - action: Sigkill

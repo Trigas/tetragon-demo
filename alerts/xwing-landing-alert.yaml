@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: xwing-landing-alert
+  namespace: tetragon-system
+spec:
+  groups:
+  - name: xwing-alerts
+    rules:
+    - alert: XwingLandingAttempt
+      expr: increase(tetragon_tracingpolicy_events_total{namespace="tetragon-demo",tracing_policy="deny-landing-unlabeled"}[1m]) > 0
+      for: 0m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Unlabeled pod tried to land on the Death Star"
+        description: "A landing request was blocked by label-based Tetragon enforcement."

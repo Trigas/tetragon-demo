@@ -1,0 +1,116 @@
+{
+  "title": "Star-Wars Landing \u2014 Attempts & Blocks",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Landing attempts vs blocks (rate)",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum by (tracing_policy) (rate(tetragon_tracingpolicy_events_total{namespace=\"tetragon-demo\",tracing_policy=~\"landing-attempts|deny-landing-unlabeled\"}[1m]))",
+          "legendFormat": "{{tracing_policy}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Attempts in last 5m",
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
+      "targets": [
+        {
+          "expr": "sum by (tracing_policy) (increase(tetragon_tracingpolicy_events_total{namespace=\"tetragon-demo\",tracing_policy=\"landing-attempts\"}[5m]))"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Blocks in last 5m",
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
+      "targets": [
+        {
+          "expr": "sum (increase(tetragon_tracingpolicy_events_total{namespace=\"tetragon-demo\",tracing_policy=\"deny-landing-unlabeled\"}[5m]))"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Recent landing events",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "tetragon_tracingpolicy_events_total{namespace=\"tetragon-demo\"}",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Value",
+            "desc": true
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "title": "Recent landing events (last 5m)",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "expr": "topk(50, increase(tetragon_tracingpolicy_events_total{namespace=\"tetragon-demo\"}[5m]))",
+          "instant": true,
+          "legendFormat": "{{tracing_policy}}"
+        }
+      ]
+    }
+  ]
+}
