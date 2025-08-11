@@ -13,6 +13,7 @@ This guide deploys **Tetragon** using the **Isovalent Helm chart** with the **in
 ## Requirements
 - macOS (M1/M2), CRC / `oc` / `helm`
 - ~14 GB RAM & 6 vCPU free for the CRC VM
+- Install jupyter-lab to use the notebook
 
 **Access requirement** — Run install as **cluster-admin** (`kubeadmin`).
 
