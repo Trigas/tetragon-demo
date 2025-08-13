@@ -2,6 +2,15 @@
 set -euo pipefail
 
 # ────────────────────────────────────────────────────────────────────────────────
+# Path check — must run from repo root (demo/)
+# ────────────────────────────────────────────────────────────────────────────────
+if [[ ! -d "manifests" || ! -d "policies" ]]; then
+  echo "❌ Please run this script from the repo root (~/demo)."
+  echo "Current directory: $(pwd)"
+  exit 1
+fi
+
+# ────────────────────────────────────────────────────────────────────────────────
 # Mode selection
 # ────────────────────────────────────────────────────────────────────────────────
 DEMO_ONLY="${DEMO_ONLY:-false}"   # set to true to skip Tetragon install and run demo only
