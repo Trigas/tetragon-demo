@@ -1,22 +1,22 @@
 # Quickstart — Tetragon + Grafana + Star‑Wars on CRC (macOS)
 
-This guide mirrors the working **CLI flow** (no helper script). It’s OpenShift‑safe (SCC aware) and matches your latest deployment method.
-
----
+This guide mirrors the deploy-tetragon-with-grafana.sh script   using **terminal** and **cli** only. It’s OpenShift‑safe (SCC aware) and matches your latest deployment method.
 
 ## 1) Install OpenShift Local (CRC)
 
-You have two options:
+CodeReady Containers (CRC) is Red Hat’s local, single-node OpenShift cluster for running and testing OpenShift on your laptop or desktop. Refer to [https://crc.dev/docs/introducing/](https://crc.dev/docs/introducing/) for information about VM requirements.
 
-### Option A — Red Hat site (recommended)
+### To deploy a openshift cluster, you have two options
+
+#### Option A — Red Hat site (recommended)
 
 1. Sign in to your Red Hat account: [https://console.redhat.com/openshift/create/local](https://console.redhat.com/openshift/create/local)
 2. Download **OpenShift Local (CRC)** for **macOS** and your **pull secret**.
 3. Save your pull secret as **pull-secret.txt** in this directory.
 
-> ⚠️ If you are using the **pull-secret.txt included in this repo**, it is for **demo use only** and must **never** be shared outside your local lab. If you have your own Red Hat account, use your own pull secret instead.
+> ⚠️ If you don't have a RH account you may use the **pull-secret.txt included in this repo**. It is for **demo use only** and must **never** be shared outside your local lab.
 
-### Option B — Homebrew
+#### Option B — Homebrew
 
 ```bash
 brew install crc
