@@ -1,0 +1,77 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: starwars-observe-all
+spec:
+  kprobes:
+    - call: "do_execveat_common"
+      syscall: false
+      message: "process_exec (any pod)"
+      return: true
+      returnArg: { index: 0, type: file }
+      selectors:
+        - namespaceSelector:
+            matchNames: ["tetragon-demo"]
+
+    - call: "sys_connect"
+      syscall: true
+      message: "sys_connect (any pod)"
+      return: false                 # observe at ENTRY (no block here)
+      selectors:
+        - namespaceSelector:
+            matchNames: ["tetragon-demo"]
+
+  dns:
+    - selector:
+        namespaceSelector:
+          matchNames: ["tetragon-demo"]
+---
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: starwars-enforce-by-label
+spec:
+  kprobes:
+    # Optional: also kill on exec for enforced pods (stops new curls instantly)
+    - call: "do_execveat_common"
+      syscall: false
+      message: "process_exec (enforced pods)"
+      return: false                 # kill before the exec completes
+      selectors:
+        - namespaceSelector:
+            matchNames: ["tetragon-demo"]
+          podSelector:
+            matchLabels:
+              tetragon.enforce: "block"
+          matchPIDs:
+            - operator: NotIn
+              isNamespacePID: true
+              values: [0, 1]
+          matchActions:
+            - action: Sigkill
+
+    # Kill on CONNECT **entry** so the request never lands
+    - call: "sys_connect"
+      syscall: true
+      message: "sys_connect (enforced pods)"
+      return: false                 # <<< kill at ENTRY (pre-connection)
+      selectors:
+        - namespaceSelector:
+            matchNames: ["tetragon-demo"]
+          podSelector:
+            matchLabels:
+              tetragon.enforce: "block"
+          matchPIDs:
+            - operator: NotIn
+              isNamespacePID: true
+              values: [0, 1]
+          matchActions:
+            - action: Sigkill
+
+  dns:
+    - selector:
+        namespaceSelector:
+          matchNames: ["tetragon-demo"]
+        podSelector:
+          matchLabels:
+            tetragon.enforce: "block"

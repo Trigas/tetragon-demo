@@ -1,0 +1,58 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: empire-starwars-activity-arm64
+  namespace: tetragon-system
+spec:
+  kprobes:
+    - call: "do_execveat_common"  # safer, arch-independent
+      syscall: false
+      return: true
+      returnArg:
+        index: 0
+        type: file
+      selectors:
+        - podSelector:
+            matchLabels:
+              org: "empire"
+              app.kubernetes.io/part-of: "starwars-demo"
+
+    - call: "sys_connect"
+      syscall: true
+      return: true
+      returnArg:
+        index: 0
+        type: int
+      selectors:
+        - podSelector:
+            matchLabels:
+              org: "empire"
+              app.kubernetes.io/part-of: "starwars-demo"
+          namespaceSelector:
+            matchNames:
+              - tetragon-demo
+
+  dns:
+    - selector:
+        podSelector:
+          matchLabels:
+            org: "empire"
+            app.kubernetes.io/part-of: "starwars-demo"
+
+  actions:
+    - type: EventLog
+      event:
+        type: syscall
+        severity: info
+        message: "Empire activity detected"
+        fields:
+          - name: syscall
+            value: "{{.syscall}}"
+          - name: return_value
+            value: "{{.return_value}}"
+          - name: file_path
+            value: "{{.file_path}}"
+          - name: pod_name
+            value: "{{.pod_name}}"
+          - name: namespace
+            value: "{{.namespace}}"

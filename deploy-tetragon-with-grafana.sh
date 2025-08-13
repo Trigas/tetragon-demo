@@ -2,6 +2,11 @@
 set -euo pipefail
 
 # ────────────────────────────────────────────────────────────────────────────────
+# Mode selection
+# ────────────────────────────────────────────────────────────────────────────────
+DEMO_ONLY="${DEMO_ONLY:-false}"   # set to true to skip Tetragon install and run demo only
+
+# ────────────────────────────────────────────────────────────────────────────────
 # Settings (override via env)
 # ────────────────────────────────────────────────────────────────────────────────
 NS="${NS:-tetragon-system}"
@@ -153,125 +158,180 @@ expose_grafana_route_http() {
 cmd_exists oc    || fail "oc not found in PATH"
 cmd_exists helm  || fail "helm not found in PATH"
 
+if [[ "$DEMO_ONLY" != "true" ]]; then
+    # ────────────────────────────────────────────────────────────────────────────────
+    # Optional: Full cleanup
+    # ────────────────────────────────────────────────────────────────────────────────
+    if [[ "$CLEAN" == "true" ]]; then
+    log "Full cleanup of $NS"
+    helm -n "$NS" uninstall "$RELEASE" || true
+    oc delete ns "$NS" --ignore-not-found=true || true
+    oc delete crd tracingpolicies.cilium.io --ignore-not-found=true || true
+    oc delete crd tracingpolicies.namespaced.cilium.io --ignore-not-found=true || true
+    oc get ns "$NS" -o name 2>/dev/null || echo "✅ Namespace gone"
+    oc get crd | egrep 'tracingpolicies(\.namespaced)?\.cilium\.io' || echo "✅ No Tetragon CRDs"
+    fi
+
+    # ────────────────────────────────────────────────────────────────────────────────
+    # Namespace + Helm repo
+    # ────────────────────────────────────────────────────────────────────────────────
+    log "Creating namespace $NS (if missing)"
+    oc new-project "$NS" >/dev/null 2>&1 || true
+
+    log "Ensuring Helm repo $CHART_REPO_NAME → $CHART_REPO_URL"
+    helm repo add "$CHART_REPO_NAME" "$CHART_REPO_URL" >/dev/null 2>&1 || true
+    helm repo update >/dev/null
+
+    log "Sanity check – tetragon chart:"
+    helm search repo "$CHART" || true
+
+    # ────────────────────────────────────────────────────────────────────────────────
+    # Install Tetragon (operator + integrated Grafana/Prometheus)
+    # ────────────────────────────────────────────────────────────────────────────────
+    log "Installing/Upgrading Tetragon with operator + integrated Grafana/Prometheus (no SCC yet)"
+    helm upgrade --install "$RELEASE" "$CHART" \
+    -n "$NS" --create-namespace \
+    --set serviceAccount.create=true \
+    --set serviceAccount.name=tetragon \
+    --set operator.enabled=true \
+    --set integratedGrafana.enabled=true \
+    --set integratedGrafana.prometheus.resources.requests.cpu=200m \
+    --set integratedGrafana.prometheus.resources.requests.memory=512Mi \
+    --set integratedGrafana.prometheus.resources.limits.memory=1Gi \
+    --set grafana.adminPassword="$GRAFANA_ADMIN_PASS" \
+    --set grafana.resources.requests.cpu=50m \
+    --set grafana.resources.requests.memory=128Mi \
+    --set grafana.resources.limits.memory=256Mi \
+    --wait=false --timeout 10m
+
+    # ────────────────────────────────────────────────────────────────────────────────
+    # Grant SCC to Tetragon DS + Operator only (NOT grafana/prom/ksm)
+    # ────────────────────────────────────────────────────────────────────────────────
+    log "Granting SCC to Tetragon components"
+    oc adm policy add-scc-to-user privileged -z tetragon -n "$NS" || true
+
+    OP_SA="tetragon-operator-service-account"
+    if ! oc -n "$NS" get sa "$OP_SA" >/dev/null 2>&1; then
+    if oc -n "$NS" get deploy tetragon-operator >/dev/null 2>&1; then
+        OP_SA="$(oc -n "$NS" get deploy tetragon-operator -o jsonpath='{.spec.template.spec.serviceAccountName}')"
+        [[ -z "$OP_SA" ]] && OP_SA="tetragon-operator-service-account"
+    fi
+    fi
+    oc adm policy add-scc-to-user anyuid -z "$OP_SA" -n "$NS" || true
+
+    # Ensure DS/Operator pick up SCC immediately
+    if oc -n "$NS" get ds tetragon >/dev/null 2>&1; then
+    rollout_restart ds tetragon "$NS"
+    fi
+    if oc -n "$NS" get deploy tetragon-operator >/dev/null 2>&1; then
+    rollout_restart deploy tetragon-operator "$NS"
+    fi
+
+    # ────────────────────────────────────────────────────────────────────────────────
+    # Patch monitoring stack early → restart → wait healthy
+    # ────────────────────────────────────────────────────────────────────────────────
+    START_UID="$(get_start_uid "$NS")"
+    log "Using project START_UID=$START_UID for UID patches"
+
+    # Give Helm a moment to create objects
+    sleep 5
+
+    # Patch immediately when resources show up (OpenShift often needs UID before pods go Ready)
+    if wait_for_existence deploy tetragon-grafana "$NS" 180; then
+    patch_workload_uid deploy tetragon-grafana "$NS" "$START_UID"
+    rollout_restart   deploy tetragon-grafana "$NS"
+    fi
+
+    if wait_for_existence deploy tetragon-kube-state-metrics "$NS" 180; then
+    patch_workload_uid deploy tetragon-kube-state-metrics "$NS" "$START_UID"
+    rollout_restart   deploy tetragon-kube-state-metrics "$NS"
+    fi
+
+    if wait_for_existence sts tetragon-prometheus "$NS" 180; then
+    patch_workload_uid sts tetragon-prometheus "$NS" "$START_UID"
+    rollout_restart   sts  tetragon-prometheus "$NS"
+    fi
+
+    # Final waits (kind-aware)
+    wait_kind deployment  tetragon-grafana            "$NS" "$LONG_TIMEOUT" || true
+    wait_kind deployment  tetragon-kube-state-metrics "$NS" "$LONG_TIMEOUT" || true
+    wait_kind daemonset   tetragon                    "$NS" "$LONG_TIMEOUT" || true
+    wait_kind deployment  tetragon-operator           "$NS" "$LONG_TIMEOUT" || true
+    wait_kind statefulset tetragon-prometheus         "$NS" "$LONG_TIMEOUT" || true
+
+
+    # Expose Grafana via HTTP Route (optional)
+    if [[ "$EXPOSE_GRAFANA" == "true" ]]; then
+    if oc -n "$NS" get svc "$GRAFANA_SERVICE_NAME" >/dev/null 2>&1; then
+        expose_grafana_route_http "$NS" "$GRAFANA_ROUTE_NAME" "$GRAFANA_SERVICE_NAME" "$GRAFANA_SERVICE_PORT_NAME"
+    else
+        log "Grafana Service '$GRAFANA_SERVICE_NAME' not found; skipping route."
+    fi
+    fi
+
+    # ────────────────────────────────────────────────────────────────────────────────
+    # Summary
+    # ────────────────────────────────────────────────────────────────────────────────
+    log "Deployment status:"
+    oc -n "$NS" get ds tetragon || true
+    oc -n "$NS" get deploy tetragon-operator tetragon-grafana tetragon-kube-state-metrics || true
+    oc -n "$NS" get sts tetragon-prometheus || true
+
+    log "Pods:"
+    oc -n "$NS" get pods -o wide | egrep 'tetragon|grafana|prometheus|kube-state-metrics' || true
+
+    log "Done. You can now: oc -n $NS get pods -w | egrep 'grafana|prometheus|kube-state-metrics|tetragon'"
+fi
 # ────────────────────────────────────────────────────────────────────────────────
-# Optional: Full cleanup
+# Star‑Wars demo (upstream) + OpenShift patches + TracingPolicy
 # ────────────────────────────────────────────────────────────────────────────────
-if [[ "$CLEAN" == "true" ]]; then
-  log "Full cleanup of $NS"
-  helm -n "$NS" uninstall "$RELEASE" || true
-  oc delete ns "$NS" --ignore-not-found=true || true
-  oc delete crd tracingpolicies.cilium.io --ignore-not-found=true || true
-  oc delete crd tracingpolicies.namespaced.cilium.io --ignore-not-found=true || true
-  oc get ns "$NS" -o name 2>/dev/null || echo "✅ Namespace gone"
-  oc get crd | egrep 'tracingpolicies(\.namespaced)?\.cilium\.io' || echo "✅ No Tetragon CRDs"
+DEMO_NS="${DEMO_NS:-tetragon-demo}"
+TRACE_YAML="${TRACE_YAML:-demo/policies/starwars_tetra_policy.yaml}"
+STARWARS_URL="${STARWARS_URL:-https://raw.githubusercontent.com/cilium/cilium/1.18.0/examples/minikube/http-sw-app.yaml}"
+DEMO_LABEL_KEY="app.kubernetes.io/part-of"
+DEMO_LABEL_VAL="starwars-demo"
+
+log "Deploying Star‑Wars demo from upstream: $STARWARS_URL"
+oc new-project "$DEMO_NS" >/dev/null 2>&1 || true
+oc -n "$DEMO_NS" apply -f "$STARWARS_URL"
+
+# Upstream uses the *default* SA; pods run as UID 0 → needs anyuid on OpenShift.
+log "Granting anyuid SCC to ServiceAccount 'default' in $DEMO_NS (lab scope)"
+oc adm policy add-scc-to-user anyuid -z default -n "$DEMO_NS" || true
+
+# Add the policy label your TracingPolicy expects.
+# 1) Ensure deathstar Deployment template gets the label (new pods inherit it)
+log "Adding ${DEMO_LABEL_KEY}=${DEMO_LABEL_VAL} to deathstar pod template"
+oc -n "$DEMO_NS" patch deploy/deathstar --type=json -p="[
+  {\"op\":\"add\",\"path\":\"/spec/template/metadata/labels/${DEMO_LABEL_KEY//\//~1}\",\"value\":\"${DEMO_LABEL_VAL}\"}
+]" || true
+
+# 2) Label current one-off pods (xwing / tiefighter)
+oc -n "$DEMO_NS" label pod/xwing      ${DEMO_LABEL_KEY}=${DEMO_LABEL_VAL} --overwrite || true
+oc -n "$DEMO_NS" label pod/tiefighter ${DEMO_LABEL_KEY}=${DEMO_LABEL_VAL} --overwrite || true
+
+# 3) Restart deathstar to ensure new ReplicaSet/pods carry the label
+oc -n "$DEMO_NS" rollout restart deploy/deathstar || true
+
+# Wait for demo to be up
+log "Waiting for demo workloads to be Ready"
+oc -n "$DEMO_NS" rollout status deploy/deathstar --timeout=3m || true
+oc -n "$DEMO_NS" get pods -o wide | egrep 'deathstar|xwing|tiefighter' || true
+
+# Apply your TracingPolicy
+if [[ -f "$TRACE_YAML" ]]; then
+  log "Applying TracingPolicy: $TRACE_YAML"
+  oc apply -f "$TRACE_YAML"
+else
+  log "TracingPolicy file not found at $TRACE_YAML — skipping (set TRACE_YAML to override)."
 fi
 
-# ────────────────────────────────────────────────────────────────────────────────
-# Namespace + Helm repo
-# ────────────────────────────────────────────────────────────────────────────────
-log "Creating namespace $NS (if missing)"
-oc new-project "$NS" >/dev/null 2>&1 || true
+cat <<'EOS'
+--------------------------------------------------------------------------------
+Star‑Wars demo ready. Try:
+  oc exec -n tetragon-demo xwing -- curl -s -XPOST deathstar.tetragon-demo.svc.cluster.local/v1/request-landing
+  oc exec -n tetragon-demo tiefighter -- curl -s -XPOST deathstar.tetragon-demo.svc.cluster.local/v1/request-landing
 
-log "Ensuring Helm repo $CHART_REPO_NAME → $CHART_REPO_URL"
-helm repo add "$CHART_REPO_NAME" "$CHART_REPO_URL" >/dev/null 2>&1 || true
-helm repo update >/dev/null
-
-log "Sanity check – tetragon chart:"
-helm search repo "$CHART" || true
-
-# ────────────────────────────────────────────────────────────────────────────────
-# Install Tetragon (operator + integrated Grafana/Prometheus)
-# ────────────────────────────────────────────────────────────────────────────────
-log "Installing/Upgrading Tetragon with operator + integrated Grafana/Prometheus (no SCC yet)"
-helm upgrade --install "$RELEASE" "$CHART" \
-  -n "$NS" --create-namespace \
-  --set serviceAccount.create=true \
-  --set serviceAccount.name=tetragon \
-  --set operator.enabled=true \
-  --set integratedGrafana.enabled=true \
-  --set integratedGrafana.prometheus.resources.requests.cpu=200m \
-  --set integratedGrafana.prometheus.resources.requests.memory=512Mi \
-  --set integratedGrafana.prometheus.resources.limits.memory=1Gi \
-  --set grafana.adminPassword="$GRAFANA_ADMIN_PASS" \
-  --set grafana.resources.requests.cpu=50m \
-  --set grafana.resources.requests.memory=128Mi \
-  --set grafana.resources.limits.memory=256Mi \
-  --wait=false --timeout 10m
-
-# ────────────────────────────────────────────────────────────────────────────────
-# Grant SCC to Tetragon DS + Operator only (NOT grafana/prom/ksm)
-# ────────────────────────────────────────────────────────────────────────────────
-log "Granting SCC to Tetragon components"
-oc adm policy add-scc-to-user privileged -z tetragon -n "$NS" || true
-
-OP_SA="tetragon-operator-service-account"
-if ! oc -n "$NS" get sa "$OP_SA" >/dev/null 2>&1; then
-  if oc -n "$NS" get deploy tetragon-operator >/dev/null 2>&1; then
-    OP_SA="$(oc -n "$NS" get deploy tetragon-operator -o jsonpath='{.spec.template.spec.serviceAccountName}')"
-    [[ -z "$OP_SA" ]] && OP_SA="tetragon-operator-service-account"
-  fi
-fi
-oc adm policy add-scc-to-user anyuid -z "$OP_SA" -n "$NS" || true
-
-# Ensure DS/Operator pick up SCC immediately
-if oc -n "$NS" get ds tetragon >/dev/null 2>&1; then
-  rollout_restart ds tetragon "$NS"
-fi
-if oc -n "$NS" get deploy tetragon-operator >/dev/null 2>&1; then
-  rollout_restart deploy tetragon-operator "$NS"
-fi
-
-# ────────────────────────────────────────────────────────────────────────────────
-# Patch monitoring stack early → restart → wait healthy
-# ────────────────────────────────────────────────────────────────────────────────
-START_UID="$(get_start_uid "$NS")"
-log "Using project START_UID=$START_UID for UID patches"
-
-# Give Helm a moment to create objects
-sleep 5
-
-# Patch immediately when resources show up (OpenShift often needs UID before pods go Ready)
-if wait_for_existence deploy tetragon-grafana "$NS" 180; then
-  patch_workload_uid deploy tetragon-grafana "$NS" "$START_UID"
-  rollout_restart   deploy tetragon-grafana "$NS"
-fi
-
-if wait_for_existence deploy tetragon-kube-state-metrics "$NS" 180; then
-  patch_workload_uid deploy tetragon-kube-state-metrics "$NS" "$START_UID"
-  rollout_restart   deploy tetragon-kube-state-metrics "$NS"
-fi
-
-if wait_for_existence sts tetragon-prometheus "$NS" 180; then
-  patch_workload_uid sts tetragon-prometheus "$NS" "$START_UID"
-  rollout_restart   sts  tetragon-prometheus "$NS"
-fi
-
-# Final waits (kind-aware)
-wait_kind deployment  tetragon-grafana            "$NS" "$LONG_TIMEOUT" || true
-wait_kind deployment  tetragon-kube-state-metrics "$NS" "$LONG_TIMEOUT" || true
-wait_kind daemonset   tetragon                    "$NS" "$LONG_TIMEOUT" || true
-wait_kind deployment  tetragon-operator           "$NS" "$LONG_TIMEOUT" || true
-wait_kind statefulset tetragon-prometheus         "$NS" "$LONG_TIMEOUT" || true
-
-
-# Expose Grafana via HTTP Route (optional)
-if [[ "$EXPOSE_GRAFANA" == "true" ]]; then
-  if oc -n "$NS" get svc "$GRAFANA_SERVICE_NAME" >/dev/null 2>&1; then
-    expose_grafana_route_http "$NS" "$GRAFANA_ROUTE_NAME" "$GRAFANA_SERVICE_NAME" "$GRAFANA_SERVICE_PORT_NAME"
-  else
-    log "Grafana Service '$GRAFANA_SERVICE_NAME' not found; skipping route."
-  fi
-fi
-
-# ────────────────────────────────────────────────────────────────────────────────
-# Summary
-# ────────────────────────────────────────────────────────────────────────────────
-log "Deployment status:"
-oc -n "$NS" get ds tetragon || true
-oc -n "$NS" get deploy tetragon-operator tetragon-grafana tetragon-kube-state-metrics || true
-oc -n "$NS" get sts tetragon-prometheus || true
-
-log "Pods:"
-oc -n "$NS" get pods -o wide | egrep 'tetragon|grafana|prometheus|kube-state-metrics' || true
-
-log "Done. You can now: oc -n $NS get pods -w | egrep 'grafana|prometheus|kube-state-metrics|tetragon'"
+Watch Tetragon events:
+  oc -n tetragon-system logs ds/tetragon -c tetragon -f | grep -E 'execve|process|network|Empire activity'
+EOS

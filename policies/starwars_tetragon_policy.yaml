@@ -1,0 +1,130 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: starwars-activity-dual-arm64
+  namespace: tetragon-system
+spec:
+  kprobes:
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Process execution (Empire)
+    # ─────────────────────────────────────────────────────────────────────────────
+    - call: "do_execveat_common"
+      syscall: false
+      return: true
+      returnArg:
+        index: 0
+        type: file
+      selectors:
+        - podSelector:
+            matchLabels:
+              org: "empire"
+              app.kubernetes.io/part-of: "starwars-demo"
+          actions:
+            - type: EventLog
+              event:
+                type: syscall
+                severity: info
+                message: "🚨 Empire activity detected"
+                fields:
+                  - name: syscall
+                    value: "{{.syscall}}"
+                  - name: return_value
+                    value: "{{.return_value}}"
+                  - name: file_path
+                    value: "{{.file_path}}"
+                  - name: pod_name
+                    value: "{{.pod_name}}"
+                  - name: namespace
+                    value: "{{.namespace}}"
+            # - type: Sigkill               # <── Uncomment to block immediately
+            #   matchActions: []
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Process execution (Alliance)
+    # ─────────────────────────────────────────────────────────────────────────────
+    - call: "do_execveat_common"
+      syscall: false
+      return: true
+      returnArg:
+        index: 0
+        type: file
+      selectors:
+        - podSelector:
+            matchLabels:
+              org: "alliance"
+              app.kubernetes.io/part-of: "starwars-demo"
+          actions:
+            - type: EventLog
+              event:
+                type: syscall
+                severity: info
+                message: "🛡 Alliance action observed"
+                fields:
+                  - name: syscall
+                    value: "{{.syscall}}"
+                  - name: return_value
+                    value: "{{.return_value}}"
+                  - name: file_path
+                    value: "{{.file_path}}"
+                  - name: pod_name
+                    value: "{{.pod_name}}"
+                  - name: namespace
+                    value: "{{.namespace}}"
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Network connect (Empire only)
+    # ─────────────────────────────────────────────────────────────────────────────
+    - call: "sys_connect"
+      syscall: true
+      return: true
+      returnArg:
+        index: 0
+        type: int
+      selectors:
+        - podSelector:
+            matchLabels:
+              org: "empire"
+              app.kubernetes.io/part-of: "starwars-demo"
+          namespaceSelector:
+            matchNames:
+              - tetragon-demo
+          actions:
+            - type: EventLog
+              event:
+                type: syscall
+                severity: info
+                message: "🚨 Empire network connect attempt"
+                fields:
+                  - name: syscall
+                    value: "{{.syscall}}"
+                  - name: return_value
+                    value: "{{.return_value}}"
+                  - name: pod_name
+                    value: "{{.pod_name}}"
+                  - name: namespace
+                    value: "{{.namespace}}"
+            # - type: Sigkill               # <── Uncomment to block immediately
+            #   matchActions: []
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # DNS lookups (Empire only)
+  # ─────────────────────────────────────────────────────────────────────────────
+  dns:
+    - selector:
+        podSelector:
+          matchLabels:
+            org: "empire"
+            app.kubernetes.io/part-of: "starwars-demo"
+      actions:
+        - type: EventLog
+          event:
+            type: dns
+            severity: info
+            message: "🌐 Empire DNS request detected"
+            fields:
+              - name: pod_name
+                value: "{{.pod_name}}"
+              - name: namespace
+                value: "{{.namespace}}"
+        # - type: Sigkill                  # <── Uncomment to block immediately
+        #   matchActions: []
