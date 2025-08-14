@@ -295,7 +295,7 @@ fi
 # Star‑Wars demo (upstream) + OpenShift patches + TracingPolicy
 # ────────────────────────────────────────────────────────────────────────────────
 DEMO_NS="${DEMO_NS:-tetragon-demo}"
-TRACE_YAML="${TRACE_YAML:-demo/policies/starwars_tetra_policy.yaml}"
+TRACE_YAML="${TRACE_YAML:-policies/starwars-observe-syscalls.yaml}"
 STARWARS_URL="${STARWARS_URL:-https://raw.githubusercontent.com/cilium/cilium/1.18.0/examples/minikube/http-sw-app.yaml}"
 DEMO_LABEL_KEY="app.kubernetes.io/part-of"
 DEMO_LABEL_VAL="starwars-demo"

@@ -1,0 +1,67 @@
+# 1) Alert-only: log ANY TCP/80 connect in tetragon-demo
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicyNamespaced
+metadata:
+  name: landing-attempts
+  namespace: tetragon-system
+spec:
+  kprobes:
+    - call: sys_connect
+      syscall: true
+      return: false
+      args:
+        - index: 0
+          type: sock
+          label: sk
+      selectors:
+        - namespaceSelector:
+            matchNames: ["tetragon-demo"]
+          matchArgs:
+            - index: 0
+              operator: DPort
+              values: ["80"]
+          # no actions → just events
+---
+# 2) Block + alert: kill Alliance pods on TCP/80 connect
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicyNamespaced
+metadata:
+  name: deny-landing-unlabeled
+  namespace: tetragon-system
+spec:
+  kprobes:
+    - call: sys_connect
+      syscall: true
+      return: false
+      args:
+        - index: 0
+          type: sock
+          label: sk
+      selectors:
+        - namespaceSelector:
+            matchNames: ["tetragon-demo"]
+          podSelector:
+            matchLabels:
+              org: alliance
+          matchArgs:
+            - index: 0
+              operator: DPort
+              values: ["80"]
+          matchActions:
+            - action: Sigkill
+---
+# 3) (Optional) DNS observe for nicer storytelling
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicyNamespaced
+metadata:
+  name: landing-dns-observe
+  namespace: tetragon-system
+spec:
+  dns:
+    - selector:
+        namespaceSelector:
+          matchNames: ["tetragon-demo"]
+      matchPatterns:
+        - "deathstar.tetragon-demo.svc.cluster.local"
+        - "deathstar.tetragon-demo.svc"
+        - "deathstar"

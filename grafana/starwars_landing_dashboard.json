@@ -1,116 +1,202 @@
 {
-  "title": "Star-Wars Landing \u2014 Attempts & Blocks",
-  "timezone": "browser",
-  "schemaVersion": 38,
-  "version": 1,
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "tetragon-prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "9.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "2.0.0"
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "iteration": 1,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Star-Wars Landing — Attempts vs Blocks",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "showPoints": "always",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "landing-attempts"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "palette-classic",
+                  "fixedColor": "green"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "solid"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "deny-landing-unlabeled"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "palette-classic",
+                  "fixedColor": "yellow"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    6,
+                    4
+                  ],
+                  "fill": "dash"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "refId": "A",
+          "exemplar": true,
+          "editorMode": "code",
+          "expr": "sum by (tracing_policy) (\n  label_replace(\n    rate(tetragon_events_total{job=\"tetragon\", namespace=\"$namespace\", type=\"PROCESS_EXEC\", binary=~\".*curl.*\"}[$__rate_interval]),\n    \"tracing_policy\",\"landing-attempts\",\"\",\"\"\n  )\n)",
+          "legendFormat": "{{tracing_policy}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "refId": "B",
+          "exemplar": true,
+          "editorMode": "code",
+          "expr": "sum by (tracing_policy) (\n  label_replace(\n    rate(tetragon_events_total{job=\"tetragon\", namespace=\"$namespace\", type=\"PROCESS_EXEC\", binary=~\".*curl.*\", workload=\"$alliance_workload\"}[$__rate_interval]),\n    \"tracing_policy\",\"deny-landing-unlabeled\",\"\",\"\"\n  )\n)",
+          "legendFormat": "{{tracing_policy}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    }
+  ],
   "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "tetragon",
+    "starwars"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "type": "constant",
+        "current": {
+          "text": "tetragon-demo",
+          "value": "tetragon-demo"
+        },
+        "label": "Namespace",
+        "query": "tetragon-demo"
+      },
+      {
+        "name": "alliance_workload",
+        "type": "constant",
+        "current": {
+          "text": "xwing",
+          "value": "xwing"
+        },
+        "label": "Alliance workload",
+        "query": "xwing"
+      }
+    ]
+  },
   "time": {
     "from": "now-15m",
     "to": "now"
   },
-  "panels": [
-    {
-      "type": "timeseries",
-      "title": "Landing attempts vs blocks (rate)",
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "targets": [
-        {
-          "expr": "sum by (tracing_policy) (rate(tetragon_tracingpolicy_events_total{namespace=\"tetragon-demo\",tracing_policy=~\"landing-attempts|deny-landing-unlabeled\"}[1m]))",
-          "legendFormat": "{{tracing_policy}}"
-        }
-      ]
-    },
-    {
-      "type": "stat",
-      "title": "Attempts in last 5m",
-      "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 0,
-        "y": 10
-      },
-      "targets": [
-        {
-          "expr": "sum by (tracing_policy) (increase(tetragon_tracingpolicy_events_total{namespace=\"tetragon-demo\",tracing_policy=\"landing-attempts\"}[5m]))"
-        }
-      ]
-    },
-    {
-      "type": "stat",
-      "title": "Blocks in last 5m",
-      "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 12,
-        "y": 10
-      },
-      "targets": [
-        {
-          "expr": "sum (increase(tetragon_tracingpolicy_events_total{namespace=\"tetragon-demo\",tracing_policy=\"deny-landing-unlabeled\"}[5m]))"
-        }
-      ]
-    },
-    {
-      "type": "table",
-      "title": "Recent landing events",
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 16
-      },
-      "targets": [
-        {
-          "expr": "tetragon_tracingpolicy_events_total{namespace=\"tetragon-demo\"}",
-          "format": "table",
-          "instant": true
-        }
-      ],
-      "options": {
-        "showHeader": true,
-        "sortBy": [
-          {
-            "displayName": "Value",
-            "desc": true
-          }
-        ]
-      }
-    },
-    {
-      "type": "table",
-      "title": "Recent landing events (last 5m)",
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 16
-      },
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            }
-          }
-        }
-      ],
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "targets": [
-        {
-          "expr": "topk(50, increase(tetragon_tracingpolicy_events_total{namespace=\"tetragon-demo\"}[5m]))",
-          "instant": true,
-          "legendFormat": "{{tracing_policy}}"
-        }
-      ]
-    }
-  ]
+  "timezone": "",
+  "title": "Star-Wars Landing (Tetragon v1.17 generic)",
+  "version": 1,
+  "weekStart": ""
 }

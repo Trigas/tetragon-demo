@@ -1,0 +1,63 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: starwars-observe-syscalls
+spec:
+  kprobes:
+    # --- Observe TCP connects (syscall layer) ---
+    - call: __arm64_sys_connect        # arm64 kernel symbol
+      syscall: true
+      return: false
+      args:
+        - index: 0
+          type: sock
+          label: sk
+      selectors:
+        - namespaceSelector:
+            matchNames: ["tetragon-demo"]
+          podSelector:
+            matchExpressions:
+              - key: class
+                operator: In
+                values: ["tiefighter","xwing","deathstar"]
+          # no actions -> observe only
+
+    - call: sys_connect                 # wrapper name (works on many kernels)
+      syscall: true
+      return: false
+      args:
+        - index: 0
+          type: sock
+          label: sk
+      selectors:
+        - namespaceSelector:
+            matchNames: ["tetragon-demo"]
+          podSelector:
+            matchExpressions:
+              - key: class
+                operator: In
+                values: ["tiefighter","xwing","deathstar"]
+
+    # --- Observe execs for curl & the deathstar binary (less noise) ---
+    - call: do_execveat_common          # function-level exec hook
+      syscall: false
+      return: false
+      args:
+        - index: 0
+          type: filename
+          label: path
+      selectors:
+        - namespaceSelector:
+            matchNames: ["tetragon-demo"]
+          podSelector:
+            matchExpressions:
+              - key: class
+                operator: In
+                values: ["tiefighter","xwing","deathstar"]
+          matchArgs:
+            - index: 0
+              operator: Prefix
+              values:
+                - "/usr/bin/curl"
+                - "/bin/curl"
+                - "/starwars-docker"   # deathstar container's app entrypoint
