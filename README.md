@@ -51,6 +51,7 @@ brew install crc
 
 ```bash
 crc setup
+crc config set memory 11980
 crc start --pull-secret-file pull-secret.txt
 ```
 
