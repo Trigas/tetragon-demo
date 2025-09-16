@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=./tracingpolicy-crd.json
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-tcp-connect-dport
+spec:
+  kprobes:
+  - call: "tcp_v4_connect"
+    return: false
+    args:
+    - index: 0
+      type: "sock"            # struct sock*
+      label: "sk4"
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: "DPort"     # valid on 'sock'
+        values: [22, 80]
+      matchActions:
+      - action: "Sigkill"
+  - call: "tcp_v6_connect"
+    return: false
+    args:
+    - index: 0
+      type: "sock"
+      label: "sk6"
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: "DPort"
+        values: [22, 80]
+      matchActions:
+      - action: "Sigkill"

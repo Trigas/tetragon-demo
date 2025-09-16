@@ -1,0 +1,20 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-connect-syscall-sport
+spec:
+  kprobes:
+  - call: "sys_connect"
+    syscall: true
+    return: false
+    args:
+    - index: 1
+      type: "sockaddr"      # connect(fd, struct sockaddr *addr, ...)
+      label: "dst"
+    selectors:
+    - matchArgs:
+      - index: 1
+        operator: "SPort"   # valid on sockaddr
+        values: ["22","80"] # <-- strings to satisfy the CRD schema
+      matchActions:
+      - action: "Sigkill"
