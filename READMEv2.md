@@ -23,6 +23,7 @@
 ### Required Software
 
 **Essential Tools:**
+
 ```bash
 # 1. Homebrew (package manager)
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -38,6 +39,7 @@ brew install helm
 ```
 
 **Optional but Recommended:**
+
 ```bash
 # kubectl (Kubernetes CLI)
 brew install kubectl
@@ -178,6 +180,7 @@ From the repo root (`~/tetragon-demo`):
 ```
 
 This will deploy:
+
 - Tetragon DaemonSet in `tetragon-system` namespace
 - Grafana with Tetragon dashboards
 - Star Wars demo pods in `tetragon-demo` namespace
@@ -239,17 +242,20 @@ selectors:
 
 ### Policy Variations
 
-**Option A: Block only HTTP (Death Star API)**
+#### Option A: Block only HTTP (Death Star API)
+
 ```yaml
 values: ["80"]  # Only block HTTP traffic
 ```
 
-**Option B: Block only SSH**
+#### Option B: Block only SSH
+
 ```yaml
 values: ["22"]  # Only block SSH access
 ```
 
-**Option C: Block with custom message**
+#### Option C: Block with custom message
+
 ```yaml
 matchActions:
 - action: "Sigkill"
@@ -271,6 +277,7 @@ crc console
 Default credentials: `admin/admin`
 
 **What you'll see:**
+
 - Connection attempts from X-Wing and TIE Fighter
 - Blocked connections (when blocking policy is active)
 - Process terminations due to policy violations
@@ -282,6 +289,7 @@ Default credentials: `admin/admin`
 ### Common Issues
 
 **CRC won't start:**
+
 ```bash
 # Check available resources
 system_profiler SPHardwareDataType | grep Memory
@@ -292,6 +300,7 @@ crc config set memory 14336
 ```
 
 **Policy not blocking:**
+
 ```bash
 # Check if policy is applied
 oc get tracingpolicy
@@ -302,6 +311,7 @@ oc logs -f ds/tetragon -n tetragon-system
 ```
 
 **Demo pods not ready:**
+
 ```bash
 # Check demo namespace
 oc get pods -n tetragon-demo
@@ -309,6 +319,7 @@ oc describe pod <pod-name> -n tetragon-demo
 ```
 
 **Dependencies missing:**
+
 ```bash
 # Verify all tools are installed
 which oc helm kubectl crc

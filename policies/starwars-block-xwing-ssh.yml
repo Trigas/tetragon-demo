@@ -1,0 +1,47 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: starwars-block-xwing-ssh
+spec:
+  kprobes:
+    # arm64 syscall you already see in events
+    - call: __arm64_sys_connect
+      syscall: true
+      return: false            # enforce at ENTRY (no LSM/override)
+      args:
+        - index: 0
+          type: sock
+          label: sk
+      selectors:
+        - namespaceSelector:    # keep blast radius to your demo ns, though the policy is global
+            matchNames: ["tetragon-demo"]
+          podSelector:
+            matchLabels:
+              class: xwing      # or use org: alliance if you prefer
+          matchArgs:
+            - index: 0
+              operator: DPort
+              values: ["22"]    # SSH
+          matchActions:
+            - action: Sigkill
+
+    # generic alias (harmless if not present)
+    - call: sys_connect
+      syscall: true
+      return: false
+      args:
+        - index: 0
+          type: sock
+          label: sk
+      selectors:
+        - namespaceSelector:
+            matchNames: ["tetragon-demo"]
+          podSelector:
+            matchLabels:
+              class: xwing
+          matchArgs:
+            - index: 0
+              operator: DPort
+              values: ["22"]
+          matchActions:
+            - action: Sigkill
