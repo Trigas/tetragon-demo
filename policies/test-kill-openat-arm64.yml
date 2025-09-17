@@ -1,0 +1,14 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: test-kill-openat-arm64
+spec:
+  podSelector:
+    matchNamespaces: [tetragon-demo]
+  kprobes:
+    - call: "__arm64_sys_openat"
+      syscall: false
+      selectors:
+        - matchActions:
+            - action: "Sigkill"
+              message: "✅ sanity: openat kill works"

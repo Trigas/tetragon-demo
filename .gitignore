@@ -1,2 +1,6 @@
 #ignore jupyter 
 .ipynb_checkpoints
+#ignore powerpoint
+*.pptx
+#ignore macos files
+.DS_Store

@@ -1,31 +1,31 @@
+#yaml-language-server: $schema=/Users/cpedrode/tetragon_darthvader/demo/policies/tracingpolicy-crd.json
 apiVersion: cilium.io/v1alpha1
 kind: TracingPolicy
 metadata:
-  name: starwars-block-xwing-ssh
+  name: starwars-block-alliance-ssh
 spec:
   kprobes:
-    # arm64 syscall you already see in events
-    - call: __arm64_sys_connect
+    - call: __arm64_sys_connect     # arm64 syscall you already see firing
       syscall: true
-      return: false            # enforce at ENTRY (no LSM/override)
+      return: false                 # enforce at ENTRY; no LSM needed
       args:
         - index: 0
           type: sock
           label: sk
       selectors:
-        - namespaceSelector:    # keep blast radius to your demo ns, though the policy is global
+        - namespaceSelector:
             matchNames: ["tetragon-demo"]
           podSelector:
             matchLabels:
-              class: xwing      # or use org: alliance if you prefer
+              org: alliance        # xwing has org=alliance
           matchArgs:
             - index: 0
               operator: DPort
-              values: ["22"]    # SSH
+              values: ["22"]
           matchActions:
             - action: Sigkill
 
-    # generic alias (harmless if not present)
+    # portable alias (harmless if not present on your kernel)
     - call: sys_connect
       syscall: true
       return: false
@@ -38,7 +38,7 @@ spec:
             matchNames: ["tetragon-demo"]
           podSelector:
             matchLabels:
-              class: xwing
+              org: alliance
           matchArgs:
             - index: 0
               operator: DPort

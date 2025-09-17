@@ -1,0 +1,29 @@
+#yaml-language-server: $schema=/Users/cpedrode/tetragon_darthvader/demo/policies/tracingpolicy-crd.json
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: block-secret
+spec:
+  podSelector:
+    matchNamespaces: [tetragon-demo]
+  kprobes:
+    - call: "__arm64_sys_openat"
+      syscall: false
+      selectors:
+        - matchArgs:
+            - index: 1
+              operator: "Equal"
+              values: ["/opt/demo/secret.txt"]
+          matchActions:
+            - action: "Sigkill"
+              message: "🚫 blocked by __arm64_sys_openat"
+    - call: "__arm64_sys_openat2"
+      syscall: false
+      selectors:
+        - matchArgs:
+            - index: 1
+              operator: "Equal"
+              values: ["/opt/demo/secret.txt"]
+          matchActions:
+            - action: "Sigkill"
+              message: "🚫 blocked by __arm64_sys_openat2"
