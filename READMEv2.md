@@ -170,6 +170,7 @@ crc start --pull-secret-file pull-secret.txt
 ```
 
 ⚠️ **Note: Due to Grafana deployment, we need to increase the memory so the demo runs.**
+
 ---
 
 ## 5. Deploy Tetragon + Grafana + Star Wars Demo
