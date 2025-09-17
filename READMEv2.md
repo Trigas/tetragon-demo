@@ -138,7 +138,7 @@ You need a valid Red Hat pull secret to run CRC.
 - Download from: <https://cloud.redhat.com/openshift/install/crc/installer-provisioned>  
 - Save as `pull-secret.txt` in this repo.  
 
-⚠️ **Important:** If you are using the pull-secret file included in this repo, it is for demo purposes only and must **never** be shared outside your local lab. If you have your own pull secret from your Red Hat account, you may use it instead without this restriction.
+⚠️ **Important:** If you are using the pull-secret shared by me, it is for demo purposes only and must **never** be shared outside your local lab. If you have your own pull secret from your Red Hat account, you may use it instead without this restriction.
 
 ---
 
@@ -169,6 +169,7 @@ crc config set memory 11980
 crc start --pull-secret-file pull-secret.txt
 ```
 
+⚠️ **Note: Due to Grafana deployment, we need to increase the memory so the demo runs.**
 ---
 
 ## 5. Deploy Tetragon + Grafana + Star Wars Demo
