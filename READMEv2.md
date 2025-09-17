@@ -151,7 +151,7 @@ You have two options:
 - Visit: <https://www.redhat.com/en/blog/codeready-containers>  
 - Download the latest macOS installer.  
 
-![CRC Download from Red Hat](B9A77B28-6D90-4939-8DA0-C5E063F74D46.png)
+![CRC Download from Red Hat](crcviaRH.png)
 
 **Option B: Install via Homebrew**  
 
@@ -169,7 +169,7 @@ crc config set memory 11980
 crc start --pull-secret-file pull-secret.txt
 ```
 
-⚠️ **Note: Due to Grafana deployment, we need to increase the memory so the demo runs.**
+⚠️ **Note:** Due to Grafana we need to increase teh memory of CRC.
 
 ---
 
