@@ -10,58 +10,7 @@
 
 ## Dependencies
 
-### System Requirements
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **macOS Version** | 10.15 (Catalina) | 12.0+ (Monterey) |
-| **RAM** | 12GB available | 16GB+ total |
-| **CPU** | 4 cores | 6+ cores |
-| **Storage** | 50GB free | 100GB+ free |
-| **Architecture** | Intel x86_64 or Apple Silicon | Apple Silicon (M1/M2) |
-
-### Required Software
-
-**Essential Tools:**
-
-```bash
-# 1. Homebrew (package manager)
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# 2. Git (version control)
-brew install git
-
-# 3. OpenShift CLI (oc)  
-brew install openshift-cli
-
-# 4. Helm (Kubernetes package manager)
-brew install helm
-```
-
-**Optional but Recommended:**
-
-```bash
-# kubectl (Kubernetes CLI)
-brew install kubectl
-
-# jq (JSON processor for easier log parsing)
-brew install jq
-
-# watch (monitor commands in real-time)
-brew install watch
-```
-
-### Red Hat Account Requirements
-
-- **Red Hat Developer Account** (free)
-- **Valid Pull Secret** from Red Hat Cloud Console
-- **CRC Binary** (CodeReady Containers)
-
-### Network Requirements
-
-- **Internet access** for downloading images and packages
-- **DNS resolution** for registry.redhat.io and quay.io
-- **Firewall exceptions** for CRC ports (if corporate firewall)
+**Prerequisites:** Same as v2 README – install Homebrew, oc, helm, etc.
 
 ---
 
@@ -106,7 +55,7 @@ graph TB
 
 Tetragon policies are defined as **TracingPolicies** (CRDs). They hook syscalls via kprobes and optionally take actions.
 
-### 1. Observability (starwars-observe-syscalls.yaml)
+### Observability Policy (starwars-observe-syscalls.yaml)
 
 - Hooks syscalls (`sys_connect`, `execve`).  
 - **No actions** → only logs the events.  
@@ -117,22 +66,23 @@ oc apply -f policies/starwars-observe-syscalls.yaml
 kubectl exec -n tetragon-system ds/tetragon -- tetra getevents
 ```
 
-✅ Connections succeed, but appear in Tetragon and Grafana【10†starwars-observe-syscalls.yaml】.
+✅ Connections succeed, but appear in Tetragon and Grafana.
 
 ---
 
-### 2. Blocking (block_syscall_test.yml, starwars-block-xwing-ssh.yml)
+### Blocking Policy (block_syscall_test.yml, starwars-block-xwing-ssh.yml)
 
 - Hooks `sys_connect` / `__arm64_sys_connect`.  
 - Matches **destination ports** (22 = SSH, 80 = HTTP) and/or **pod labels**.  
-- Action: `Sigkill` → kill offending process【8†block_syscall_test.yml】【9†starwars-block-xwing-ssh.yml】.
+- Action: `Sigkill` → kill offending process.
 
 ⚠️ **Important:** In CRC, **LSM is not available**, so Tetragon cannot pre-block. Instead:  
+
 - The syscall executes.  
 - Tetragon detects violation.  
 - The offending process is **killed after the syscall**.  
 
-So enforcement is “detect then kill”, not “prevent at entry”.
+So enforcement is "detect then kill", not "prevent at entry".
 
 Example:
 
@@ -152,10 +102,12 @@ Beyond network calls, you can also test **file access monitoring**.
 ### Deploy the Pod
 
 ```bash
-oc -n tetragon-demo run secret-test   --image=busybox   --restart=Never   --command -- sleep 3600
+oc -n tetragon-demo run secret-test --image=busybox --restart=Never --command -- sleep 3600
 
 oc -n tetragon-demo exec secret-test -- sh -lc '
-  mkdir -p /opt/demo &&   echo "THERMAL EXHAUST PORT: SUPER SECRET" > /opt/demo/secret.txt &&   chmod 600 /opt/demo/secret.txt'
+  mkdir -p /opt/demo &&
+  echo "THERMAL EXHAUST PORT: SUPER SECRET" > /opt/demo/secret.txt &&
+  chmod 600 /opt/demo/secret.txt'
 ```
 
 ### Purpose
@@ -193,13 +145,16 @@ spec:
 
 ## Demo Scenarios
 
-### Scenario 1 – Observe Connections
+### Scenario 1: Observe Connections
+
 Apply observability policy, connections succeed but are logged.
 
-### Scenario 2 – Block Connections
+### Scenario 2: Block Connections
+
 Apply blocking policy, offending process is killed after the syscall.
 
-### Scenario 3 – File Access Monitoring
+### Scenario 3: File Access Monitoring
+
 Apply openat policy to block or log access to `/opt/demo/secret.txt`.
 
 ---
@@ -230,7 +185,7 @@ Two dashboards included:
 
 - The Intrusion detector panel includes an alert:  
   - **Condition:** file access rate > 0 for 1m  
-  - **Message:** “🚨 File access intrusion: $filename accessed in $namespace”  
+  - **Message:** "🚨 File access intrusion: $filename accessed in $namespace"  
 - For Grafana Unified Alerting, create an equivalent rule:
 
 ```promql
@@ -245,6 +200,43 @@ sum(
 ```
 
 Trigger if `> 0` for 1m and send to Slack/Email/Teams.
+
+---
+
+## Developer Tips
+
+### Quick CRC Login Helper (crcdev)
+
+To simplify logging into CRC and setting up the `oc` CLI environment, add this helper function to your `~/.zshrc`:
+
+```zsh
+# Created by Trigas to auto login CRC and add oc commands
+crcdev() {
+    # Export oc binary path and KUBECONFIG from CRC
+    eval "$(crc oc-env)"
+
+    # Extract kubeadmin password automatically
+    local PW
+    PW="$(crc console --credentials | grep -F "kubeadmin" | sed -E 's/.*-p ([^ ]+).*//')"
+
+    # Login with kubeadmin to CRC API
+    oc login -u kubeadmin -p "$PW" https://api.crc.testing:6443
+}
+```
+
+Then reload your shell:
+
+```bash
+source ~/.zshrc
+```
+
+Now you can log in quickly by running:
+
+```bash
+crcdev
+```
+
+This will auto-export `oc` environment variables and log you in as **kubeadmin** to the CRC cluster.
 
 ---
 

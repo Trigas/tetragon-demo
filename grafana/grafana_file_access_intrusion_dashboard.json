@@ -1,48 +1,9 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_PROMETHEUS",
-      "label": "Prometheus",
-      "description": "tetragon-prometheus",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "pluginName": "Prometheus"
-    }
-  ],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "9.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "stat",
-      "name": "Stat",
-      "version": ""
-    },
-    {
-      "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
-      "version": "2.0.0"
-    }
-  ],
   "annotations": {
     "list": [
       {
         "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
+        "datasource": "-- Grafana --",
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -52,168 +13,119 @@
     ]
   },
   "editable": true,
-  "fiscalYearStartMonth": 0,
+  "gnetId": null,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1758100751187,
   "links": [],
-  "liveNow": false,
   "panels": [
     {
-      "type": "timeseries",
-      "title": "Secret file open() rate by pod",
-      "id": 1,
+      "datasource": "${DS_PROMETHEUS}",
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "showPoints": "always",
-            "spanNulls": true
-          }
+          "unit": "ops"
         },
         "overrides": []
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "refId": "A",
-          "editorMode": "code",
-          "expr": "sum by (pod, filename) (\n  rate(tetragon_events_total{job=\"tetragon\", namespace=\"$namespace\", function=~\"__arm64_sys_openat.*|sys_openat.*|.*openat.*\", filename=\"$filename\"}[$__rate_interval])\n)",
-          "legendFormat": "{{pod}} \u2192 {{filename}}"
-        }
-      ],
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
       },
       "gridPos": {
         "h": 10,
         "w": 24,
         "x": 0,
         "y": 0
-      }
-    },
-    {
-      "type": "stat",
-      "title": "\ud83d\udea8 Intrusion detector: secret file access (last 5m)",
-      "id": 2,
+      },
+      "id": 1,
       "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
         },
-        "orientation": "auto",
-        "textMode": "value"
+        "tooltip": {
+          "mode": "single"
+        }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "refId": "A",
-          "editorMode": "code",
-          "expr": "sum(\n  rate(tetragon_events_total{job=\"tetragon\", namespace=\"$namespace\", function=~\"__arm64_sys_openat.*|sys_openat.*|.*openat.*\", filename=\"$filename\"}[5m])\n)"
+          "expr": "sum by (pod, filename) (\n  rate(tetragon_events_total{\n    namespace=\"$namespace\",\n    function=~\".*openat.*\",\n    filename=\"$filename\"\n  }[$__rate_interval])\n)",
+          "legendFormat": "{{pod}} → {{filename}}",
+          "refId": "A"
         }
       ],
-      "alert": {
-        "alertRuleTags": {
-          "severity": "high",
-          "category": "file-access"
+      "title": "File Access Events (per pod, per filename)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "decimals": 0
         },
-        "conditions": [
-          {
-            "evaluator": {
-              "params": [
-                0
-              ],
-              "type": "gt"
-            },
-            "operator": {
-              "type": "and"
-            },
-            "query": {
-              "params": [
-                "A",
-                "5m",
-                "now"
-              ]
-            },
-            "reducer": {
-              "params": [],
-              "type": "avg"
-            },
-            "type": "query"
-          }
-        ],
-        "executionErrorState": "alerting",
-        "for": "1m",
-        "frequency": "1m",
-        "handler": 1,
-        "message": "File access intrusion: $filename accessed in $namespace",
-        "name": "Secret File Access Alert",
-        "noDataState": "no_data",
-        "notifications": []
+        "overrides": []
       },
       "gridPos": {
         "h": 6,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 10
       },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops"
-        },
-        "overrides": []
-      }
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(\n  rate(tetragon_events_total{\n    namespace=\"$namespace\",\n    function=~\".*openat.*\",\n    filename=\"$filename\"\n  }[5m])\n)",
+          "refId": "A"
+        }
+      ],
+      "title": "File Access Rate (5m avg)",
+      "type": "stat"
     }
   ],
   "refresh": "10s",
-  "schemaVersion": 38,
+  "schemaVersion": 37,
   "style": "dark",
   "tags": [
     "tetragon",
-    "security",
     "file-access"
   ],
   "templating": {
     "list": [
       {
-        "name": "namespace",
-        "type": "constant",
         "current": {
+          "selected": true,
           "text": "tetragon-demo",
           "value": "tetragon-demo"
         },
+        "hide": 0,
         "label": "Namespace",
-        "query": "tetragon-demo"
+        "name": "namespace",
+        "options": [],
+        "query": "label_values(tetragon_events_total, namespace)",
+        "refresh": 2,
+        "type": "query"
       },
       {
-        "name": "filename",
-        "type": "constant",
         "current": {
+          "selected": true,
           "text": "/opt/demo/secret.txt",
           "value": "/opt/demo/secret.txt"
         },
-        "label": "Secret file",
-        "query": "/opt/demo/secret.txt"
+        "hide": 0,
+        "label": "Filename",
+        "name": "filename",
+        "options": [],
+        "query": "label_values(tetragon_events_total, filename)",
+        "refresh": 2,
+        "type": "query"
       }
     ]
   },
@@ -222,7 +134,7 @@
     "to": "now"
   },
   "timezone": "",
-  "title": "File Access Intrusion (Tetragon)",
-  "version": 1,
-  "weekStart": ""
+  "title": "File Access Intrusion Detection",
+  "uid": "file-access-demo",
+  "version": 2
 }

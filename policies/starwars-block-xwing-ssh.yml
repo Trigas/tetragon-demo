@@ -1,47 +1,92 @@
-#yaml-language-server: $schema=/Users/cpedrode/tetragon_darthvader/demo/policies/tracingpolicy-crd.json
 apiVersion: cilium.io/v1alpha1
 kind: TracingPolicy
 metadata:
-  name: starwars-block-alliance-ssh
+  name: starwars-block-xwing-ssh-corrected
 spec:
   kprobes:
-    - call: __arm64_sys_connect     # arm64 syscall you already see firing
+    # A) Syscall path (arm64): connect(fd, sockaddr*, ...)
+    - call: __arm64_sys_connect
       syscall: true
-      return: false                 # enforce at ENTRY; no LSM needed
+      return: false
       args:
-        - index: 0
-          type: sock
-          label: sk
+        - index: 1          # sockaddr* (destination) is arg1
+          type: sockaddr
+          label: sa
       selectors:
-        - namespaceSelector:
-            matchNames: ["tetragon-demo"]
+        - namespaceSelector: { matchNames: ["tetragon-demo"] }
           podSelector:
-            matchLabels:
-              org: alliance        # xwing has org=alliance
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: ["xwing"]
           matchArgs:
-            - index: 0
-              operator: DPort
+            - index: 1
+              operator: SPort        # <-- NOT DPort when type is sockaddr
               values: ["22"]
-          matchActions:
-            - action: Sigkill
+            # (optional) also pin family if you want
+            # - index: 1
+            #   operator: Family
+            #   values: ["AF_INET","AF_INET6"]
+          matchActions: [{ action: Sigkill }]
 
-    # portable alias (harmless if not present on your kernel)
+    # (Optional portability alias; harmless if missing)
     - call: sys_connect
       syscall: true
+      return: false
+      args:
+        - index: 1
+          type: sockaddr
+          label: sa
+      selectors:
+        - namespaceSelector: { matchNames: ["tetragon-demo"] }
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: ["xwing"]
+          matchArgs:
+            - index: 1
+              operator: SPort
+              values: ["22"]
+          matchActions: [{ action: Sigkill }]
+
+    # B) TCP function path (uses sock@index 0; DPort is valid here)
+    - call: tcp_v4_connect
+      syscall: false
       return: false
       args:
         - index: 0
           type: sock
           label: sk
       selectors:
-        - namespaceSelector:
-            matchNames: ["tetragon-demo"]
+        - namespaceSelector: { matchNames: ["tetragon-demo"] }
           podSelector:
-            matchLabels:
-              org: alliance
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: ["xwing"]
           matchArgs:
             - index: 0
               operator: DPort
               values: ["22"]
-          matchActions:
-            - action: Sigkill
+          matchActions: [{ action: Sigkill }]
+
+    - call: tcp_v6_connect
+      syscall: false
+      return: false
+      args:
+        - index: 0
+          type: sock
+          label: sk
+      selectors:
+        - namespaceSelector: { matchNames: ["tetragon-demo"] }
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: ["xwing"]
+          matchArgs:
+            - index: 0
+              operator: DPort
+              values: ["22"]
+          matchActions: [{ action: Sigkill }]

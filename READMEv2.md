@@ -78,36 +78,26 @@ graph TB
         
         subgraph "tetragon-demo namespace"
             subgraph "Rebel Alliance"
-                X[X-Wing Fighter<br/>🚀 FastAPI Client<br/>curl requests]
+                X[X-Wing Fighter<br/>🚀 FastAPI Client<br/>curl requests<br/>org=alliance]
             end
             
             subgraph "Galactic Empire"  
-                TF[TIE Fighter<br/>⚔️ FastAPI Client<br/>curl requests]
+                TF[TIE Fighter<br/>⚔️ FastAPI Client<br/>curl requests<br/>org=empire]
                 DS[Death Star<br/>💀 FastAPI Server<br/>REST API endpoints]
+                S[Secret Test Pod<br/>🔐 Busybox container<br/>local file secrets]
             end
         end
     end
 
     %% Traffic flows
-    X -.->|Blocked HTTP<br/>Port 80| DS
-    TF -.->|Blocked HTTP<br/>Port 80| DS
-    X -.->|Blocked SSH<br/>Port 22| DS
-    TF -.->|Blocked SSH<br/>Port 22| DS
+    X -->|HTTP/SSH attempts| DS
+    TF -->|HTTP/SSH attempts| DS
     
     %% Monitoring flows
-    T -->|Observes syscalls<br/>sys_connect, execve| X
-    T -->|Observes syscalls<br/>sys_connect, execve| TF  
-    T -->|Observes syscalls<br/>sys_connect, execve| DS
-    
-    %% Styling
-    classDef rebel fill:#4a90e2,stroke:#2171b5,color:#fff
-    classDef empire fill:#dc3545,stroke:#bd2130,color:#fff
-    classDef security fill:#28a745,stroke:#1e7e34,color:#fff
-    classDef blocked stroke-dasharray: 5 5,stroke:#dc3545
-    
-    class X rebel
-    class TF,DS empire
-    class T,G security
+    T -->|Observes syscalls<br/>sys_connect, execve, openat| X
+    T --> TF
+    T --> DS
+    T --> S
 ```
 
 ### Component Details
@@ -170,6 +160,80 @@ crc start --pull-secret-file pull-secret.txt
 ```
 
 ⚠️ **Note:** Due to Grafana we need to increase teh memory of CRC.
+
+---
+
+## Developer Tips
+
+### Quick CRC Login Helper (crcdev)
+
+To simplify logging into CRC and setting up the `oc` CLI environment, add this helper function to your `~/.zshrc`:
+
+```zsh
+# Created by Trigas to auto login CRC and add oc commands
+crcdev() {
+    # Export oc binary path and KUBECONFIG from CRC
+    eval "$(crc oc-env)"
+
+    # Extract kubeadmin password automatically
+    local PW
+    PW="$(crc console --credentials | grep -F "kubeadmin" | sed -E 's/.*-p ([^ ]+).*//')"
+
+    # Login with kubeadmin to CRC API
+    oc login -u kubeadmin -p "$PW" https://api.crc.testing:6443
+}
+```
+
+Then reload your shell:
+
+```bash
+source ~/.zshrc
+```
+
+Now you can log in quickly by running:
+
+```bash
+crcdev
+```
+
+This will auto-export `oc` environment variables and log you in as **kubeadmin** to the CRC cluster.
+
+---
+
+## Developer Tips
+
+### Quick CRC Login Helper (crcdev)
+
+To simplify logging into CRC and setting up the `oc` CLI environment, add this helper function to your `~/.zshrc`:
+
+```zsh
+# Created by Trigas to auto login CRC and add oc commands
+crcdev() {
+    # Export oc binary path and KUBECONFIG from CRC
+    eval "$(crc oc-env)"
+
+    # Extract kubeadmin password automatically
+    local PW
+    PW="$(crc console --credentials | grep -F "kubeadmin" | sed -E 's/.*-p ([^ ]+).*//')"
+
+    # Login with kubeadmin to CRC API
+    oc login -u kubeadmin -p "$PW" https://api.crc.testing:6443
+}
+```
+
+Then reload your shell:
+
+```bash
+source ~/.zshrc
+```
+
+Now you can log in quickly by running:
+
+```bash
+crcdev
+```
+
+This will auto-export `oc` environment variables and log you in as **kubeadmin** to the CRC cluster.
 
 ---
 

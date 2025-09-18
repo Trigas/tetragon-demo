@@ -1,0 +1,23 @@
+# observe-openat-debug.yaml
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: observe-openat-debug
+spec:
+  podSelector:
+    matchNamespaces: [tetragon-demo]
+  kprobes:
+    - call: "__arm64_sys_openat"
+      syscall: false
+      args:
+        - index: 1
+          type: char_buf
+          size: 256
+          label: path
+    - call: "__arm64_sys_openat2"
+      syscall: false
+      args:
+        - index: 1
+          type: char_buf
+          size: 256
+          label: path

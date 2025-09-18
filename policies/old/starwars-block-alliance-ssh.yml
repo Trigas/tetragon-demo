@@ -1,0 +1,26 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: starwars-block-alliance-ssh
+spec:
+  kprobes:
+    - call: __arm64_sys_connect
+      syscall: true
+      return: false
+      args: [{ index: 0, type: sock, label: sk }]
+      selectors:
+        - namespaceSelector: { matchNames: ["tetragon-demo"] }
+          podSelector: { matchLabels: { org: alliance } }
+          matchArgs:
+            - { index: 0, operator: DPort, values: ["22"] }
+          matchActions: [{ action: Sigkill }]
+    - call: sys_connect
+      syscall: true
+      return: false
+      args: [{ index: 0, type: sock, label: sk }]
+      selectors:
+        - namespaceSelector: { matchNames: ["tetragon-demo"] }
+          podSelector: { matchLabels: { org: alliance } }
+          matchArgs:
+            - { index: 0, operator: DPort, values: ["22"] }
+          matchActions: [{ action: Sigkill }]

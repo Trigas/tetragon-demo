@@ -335,11 +335,31 @@ else
   log "TracingPolicy file not found at $TRACE_YAML — skipping (set TRACE_YAML to override)."
 fi
 
+# Apply port-forward to Tetragon gRPC
+log "Setting up port-forward to Tetragon gRPC for demo use (localhost:54321)"
+echo "⏳ Waiting for Tetragon DaemonSet to become ready..."
+oc -n tetragon-system rollout status ds/tetragon --timeout=180s
+
+echo "🔌 Starting port-forward to Tetragon gRPC (localhost:54321)..."
+TETRAGON_POD=$(oc -n tetragon-system get pod -l app.kubernetes.io/name=tetragon \
+  -o jsonpath='{.items[0].metadata.name}')
+
+oc -n tetragon-system port-forward pod/$TETRAGON_POD 54321:54321 &
+PF_PID=$!
+echo "➡️ Port-forward started (PID $PF_PID). Use 'kill $PF_PID' to stop it."
+
+
 cat <<'EOS'
 --------------------------------------------------------------------------------
 Star‑Wars demo ready. Try:
   oc exec -n tetragon-demo xwing -- curl -s -XPOST deathstar.tetragon-demo.svc.cluster.local/v1/request-landing
   oc exec -n tetragon-demo tiefighter -- curl -s -XPOST deathstar.tetragon-demo.svc.cluster.local/v1/request-landing
+  oc exec -n tetragon-demo xwing -- curl -s -XPUT -H "X-Has-Force: true" http://deathstar.tetragon-demo.svc.cluster.local/v1/exhaust-port
+
+  # test  SSH blocking (should timeout/fail)
+  oc exec -n tetragon-demo xwing -- curl -v --connect-timeout 2 deathstar.tetragon-demo.svc.cluster.local:22
+
+  #test file access control
 
 Watch Tetragon events:
   oc -n tetragon-system logs ds/tetragon -c tetragon -f | grep -E 'execve|process|network|Empire activity'
