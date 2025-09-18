@@ -68,20 +68,28 @@ brew install watch
 ## Demo Architecture
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {
+    "background": "#1e1e1e",
+    "primaryColor": "#2e2e2e",
+    "edgeLabelBackground":"#1e1e1e",
+    "lineColor": "#cccccc",
+    "textColor": "#ffffff"
+}} }%%
+
 graph TB
     subgraph "OpenShift Cluster (CRC)"
         subgraph "tetragon-system namespace"
-            T[Tetragon DaemonSet<br/>eBPF Runtime Security]
-            G[Grafana<br/>Observability Dashboard]
+            T[Tetragon DaemonSet<br/>🛡️ eBPF Runtime Security]
+            G[Grafana<br/>📊 Observability Dashboard]
             T --> G
         end
-        
+
         subgraph "tetragon-demo namespace"
             subgraph "Rebel Alliance"
                 X[X-Wing Fighter<br/>🚀 FastAPI Client<br/>curl requests<br/>org=alliance]
             end
-            
-            subgraph "Galactic Empire"  
+
+            subgraph "Galactic Empire"
                 TF[TIE Fighter<br/>⚔️ FastAPI Client<br/>curl requests<br/>org=empire]
                 DS[Death Star<br/>💀 FastAPI Server<br/>REST API endpoints]
                 S[Secret Test Pod<br/>🔐 Busybox container<br/>local file secrets]
@@ -92,12 +100,20 @@ graph TB
     %% Traffic flows
     X -->|HTTP/SSH attempts| DS
     TF -->|HTTP/SSH attempts| DS
-    
+
     %% Monitoring flows
-    T -->|Observes syscalls<br/>sys_connect, execve, openat2 | X
+    T --> X
     T --> TF
     T --> DS
     T --> S
+
+    %% Explicit styles
+    style T fill:#2e2e2e,stroke:#ffffff,color:#ffffff
+    style G fill:#2e2e2e,stroke:#ffffff,color:#ffffff
+    style X fill:#2e2e2e,stroke:#ffffff,color:#ffffff
+    style TF fill:#2e2e2e,stroke:#ffffff,color:#ffffff
+    style DS fill:#2e2e2e,stroke:#ffffff,color:#ffffff
+    style S fill:#2e2e2e,stroke:#ffffff,color:#ffffff
 ```
 
 ### Component Details
