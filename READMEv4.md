@@ -18,7 +18,7 @@
 | **RAM** | 12GB available | 16GB+ total |
 | **CPU** | 4 cores | 6+ cores |
 | **Storage** | 50GB free | 100GB+ free |
-| **Architecture** | Intel x86_64 or Apple Silicon | Apple Silicon (M1/M2) |
+| **Architecture** | Intel x86_64 or Apple Silicon | Apple Silicon (M1/M2/M3) |
 
 ### Required Software
 
@@ -161,6 +161,7 @@ crc start --pull-secret-file pull-secret.txt
 ```
 
 This deploys:  
+
 - Tetragon DaemonSet (`tetragon-system`)  
 - Grafana dashboards  
 - Star Wars demo pods (`tetragon-demo`)  
@@ -170,7 +171,7 @@ This deploys:
 
 ## 6. Tracing Policies: Observability vs Blocking
 
-Tetragon policies are defined as **TracingPolicies**.  A `TracingPolicy` is a Kubernetes CRD (`cilium.io/v1alpha1`) that lets you hook syscalls (e.g., `sys_connect`, `openat`, `execve`) via `kprobes`. You capture args (sock, filename, etc.), filter with selectors (namespace/pod/matchArgs), and apply actions like `Sigkill` or `Record`.
+Tetragon policies are defined as **TracingPolicies**. A `TracingPolicy` is a Kubernetes CRD (`cilium.io/v1alpha1`) that lets you hook syscalls (e.g., `sys_connect`, `openat`, `execve`) via `kprobes`. You capture args (sock, filename, etc.), filter with selectors (namespace/pod/matchArgs), and apply actions like `Sigkill` or `Record`.
 
 ### Observability (starwars-observe-syscalls.yaml)
 
@@ -178,7 +179,7 @@ Tetragon policies are defined as **TracingPolicies**.  A `TracingPolicy` is a Ku
 - **Logs only** (no actions)  
 - Connections succeed but appear in Tetragon and Grafana  
 
-⚠️ **Note:**This policy has been applied with  the installation script - no need to  install it again!!
+⚠️ **Note:** This policy has been applied with the installation script - no need to install it again!!
 
 ```bash
 # Apply the observability TracingPolicy
@@ -205,7 +206,7 @@ spec:
 YAML
 oc -n tetragon-demo wait --for=condition=Ready pod/xwing --timeout=120s
 
-# Open a new terminal an use tetra cli to stream the events
+# Open a new terminal and use tetra cli to stream the events
 tetra getevents --namespace tetragon-demo --color always -o compact
 
 # Trigger some traffic (X-Wing curl to Death Star)
@@ -218,7 +219,7 @@ oc -n tetragon-demo exec xwing -- curl http://deathstar.tetragon-demo.svc.cluste
 - Matches destination ports and/or pod labels  
 - Action: `Sigkill` → kill offending process  
 
-⚠️ **Note:** In CRC, **LSM not available**. Enforcement = **detect then kill**, not prevent.  
+⚠️ **Note:** In CRC, **LSM is not available**. Enforcement = **detect then kill**, not prevent.  
 
 This policy prevents the **X-Wing pod** from connecting to the Death Star on **port 22 (SSH)**.  
 It combines syscall-level and function-level probes to catch both IPv4 and IPv6 TCP connect attempts.  
@@ -259,12 +260,11 @@ spec:
 YAML
 oc -n tetragon-demo wait --for=condition=Ready pod/xwing --timeout=120s
 
-# Open a new terminal an use tetra cli to stream the events
+# Open a new terminal and use tetra cli to stream the events
 tetra getevents --namespace tetragon-demo --color always -o compact
 
 # Attempt SSH (curl to port 22) from the X-Wing
 oc -n tetragon-demo exec xwing -- curl -v --connect-timeout 2 deathstar.tetragon-demo.svc.cluster.local:22
-
 ```
 
 ---
@@ -305,9 +305,33 @@ spec:
 
 ---
 
-## 8. Grafana Dashboards & Alerts
+## 8. Automated Sanity Testing
+
+For continuous testing and Grafana event generation, use the provided sanity test script:
+
+```bash
+# Make the script executable
+chmod +x demo/sanity_starwars.sh
+
+# Run the automated test (generates varied traffic patterns)
+./demo/sanity_starwars.sh
+```
+
+This script performs randomized:
+
+- X-Wing and TIE Fighter landing requests
+- Parallel SSH attempts from both pods (triggers blocking policies)
+- Varied timing to prevent graph overlap in Grafana
+
+---
+
+## 9. Grafana Dashboards & Alerts
+
+You can extend the dashboards with **alerts** to get notified when suspicious activity occurs.  
+For example, alert when the X-Wing process (`curl`) is repeatedly killed by Tetragon.
 
 Dashboards included:  
+
 - **Star-Wars Landing Dashboard**  
 - **Tetragon Events Dashboard**  
 - **File Access Intrusion Dashboard** (import separately)  
@@ -315,33 +339,49 @@ Dashboards included:
 ### Import File Access Intrusion Dashboard
 
 1. In Grafana → Dashboards → Import  
-2. Upload `grafana_file_access_intrusion_dashboard.json`  
+2. Upload `grafana/starwars-observe-block-v12.json`  
 3. Select `tetragon-prometheus` datasource  
-4. Variables:  
-   - namespace = `tetragon-demo`  
-   - filename = `/opt/demo/secret.txt`  
 
 ### Alerting
 
-- Condition: file access > 0 for 1m  
-- Message: 🚨 File access intrusion: $filename in $namespace  
+**Create a Grafana alert (no variables):**
 
-PromQL for Unified Alerting:
+1. In Grafana: **Alerting → Alert rules → New alert rule**.  
+2. Add **Query A** (select your Prometheus datasource):
 
 ```promql
 sum(
-  rate(tetragon_events_total{
+  increase(tetragon_events_total{
     job="tetragon",
     namespace="tetragon-demo",
-    function=~"__arm64_sys_openat.*|sys_openat.*|.*openat.*",
-    filename="/opt/demo/secret.txt"
-  }[5m])
+    type="PROCESS_EXIT",
+    binary=~".*curl.*",
+    workload="xwing"
+  }[1m])
 )
 ```
 
+3. **Condition**  
+   - WHEN `last()` OF A IS ABOVE `2`  
+   - (this means ≥3 exits in the past 1 minute)
+4. **Save and notify**  
+   - Pick a **folder**  
+   - Set **Evaluate every 30s**  
+   - Choose your **Contact point** (email, Slack, webhook, etc.)  
+   - Click **Save** folder, set Evaluate every 30s, choose your Contact point (email, Slack, webhook, etc.), and Save.
+5. **Add alert to dashboard**  
+   - Open your dashboard (e.g., *Star Wars – Observe & Block*)  
+   - Click **Edit dashboard** (top-right)  
+   - Click **Add → Visualization → Alert list**  
+   - Configure:  
+     - **Datasource** → Prometheus  
+     - **Folder** → Tetragon Alerts (or leave empty to show all)  
+     - **Alert state filter** → Alerting + Pending  
+   - Save the dashboard
+
 ---
 
-## 9. Developer Tips
+## 10. Developer Tips
 
 ### Quick CRC Login Helper (`crcdev`)
 
@@ -351,7 +391,7 @@ Add this to `~/.zshrc`:
 crcdev() {
     eval "$(crc oc-env)"
     local PW
-    PW="$(crc console --credentials         | grep -F "kubeadmin"         | sed -E 's/.*-p ([^ ]+).*//')"
+    PW="$(crc console --credentials | grep -F "kubeadmin" | sed -E 's/.*-p ([^ ]+).*/\1/')"
     oc login -u kubeadmin -p "$PW" https://api.crc.testing:6443
 }
 ```
@@ -372,7 +412,7 @@ crcdev
 
 ---
 
-## 10. Cleanup
+## 11. Cleanup
 
 ```bash
 oc delete -f policies/block_syscall_test.yml

@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: tetragon-ssh-alerts
+  namespace: tetragon-system
+spec:
+  groups:
+  - name: tetragon.ssh.rules
+    rules:
+    - alert: MultipleSSHAttempts
+      expr: |
+        sum by (pod, namespace) (
+          increase(tetragon_events_total{type="PROCESS_CONNECT", dport="22"}[1m])
+        ) > 3
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "🚨 Multiple SSH attempts detected"
+        description: "Pod {{ $labels.pod }} in {{ $labels.namespace }} attempted >3 SSH (port 22) connections in the last minute."
